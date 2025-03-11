@@ -24,11 +24,15 @@ public class Parser implements Closeable {
       r.close();
    }
 
-   ////////////////////////////////////////////////////////////////
-   //////////////////////////// COMMON ////////////////////////////
-   ////////////////////////////////////////////////////////////////
+   // base parsing methods
 
-   public boolean parseAny() throws IOException {
+   public void parseAll() throws IOException {
+      while (parseOneStep()) {
+         // keep going
+      }
+   }
+
+   public boolean parseOneStep() throws IOException {
       final int c = r.read();
       if (c == -1) {
          return false;
@@ -176,9 +180,7 @@ public class Parser implements Closeable {
       return isDigit(c) || c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z';
    }
 
-   ////////////////////////////////////////////////////////////////
-   /////////////////////////// PARSING ////////////////////////////
-   ////////////////////////////////////////////////////////////////
+   // main parsing methods
 
    private String parseName() throws IOException {
       // https://www.w3.org/TR/xml11/#NT-Name
@@ -362,7 +364,7 @@ public class Parser implements Closeable {
       // XMLDecl - https://www.w3.org/TR/xml11/#NT-XMLDecl - <?xml ... ?>
       // PI - https://www.w3.org/TR/xml11/#NT-PI - <? ... ?>
 
-      throw new UnsupportedOperationException("TODO");
+      throw new UnsupportedOperationException("TODO xml declarations/PI tags are not implemented");
    }
 
    private void parseExclamationTag() throws IOException {
@@ -372,6 +374,6 @@ public class Parser implements Closeable {
       // CDSect - https://www.w3.org/TR/xml11/#NT-CDSect - <![CDATA[ ... ]]>
       // Comment - https://www.w3.org/TR/xml11/#NT-Comment <!-- ... -->
 
-      throw new UnsupportedOperationException("TODO");
+      throw new UnsupportedOperationException("TODO comments/cdada/doctype tags are not implemented");
    }
 }

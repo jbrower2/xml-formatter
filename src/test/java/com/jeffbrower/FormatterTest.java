@@ -41,7 +41,7 @@ public class FormatterTest {
          final Formatter f = new Formatter(w, o);
          final Parser p = new Parser(new PushbackReader(new StringReader(in)), f)
       ) {
-         while (p.parseAny()) {
+         while (p.parseOneStep()) {
             // keep going
 
             log("=".repeat(100));
