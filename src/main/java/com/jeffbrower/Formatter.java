@@ -65,30 +65,36 @@ public class Formatter implements Closeable {
    public void writeEmptyTag(final String tagName, final Map<String, String> attributes) throws IOException {
       log("writeEmptyTag");
       log("- tagName: " + tagName);
-      log("- attributes:");
-      for (final Map.Entry<String, String> e : attributes.entrySet()) {
-         log("  - " + e.getKey() + "=" + e.getValue());
-      }
 
+      // if we have a partial start tag, finish it and then add this as a child
       finishInProgressStuff();
 
       final boolean oneLine;
       if (o.singleAttributePerLine) {
+         // allow overriding this behavior to always have one attribute per line
          oneLine = false;
       } else {
+         // indent (important! we still use tabWidth even if you use tabs) + "<tagName".length
          int lineLength = indent * o.tabWidth + 1 + tagName.length();
+
+         // add length of all attributes
          for (final Map.Entry<String, String> e : attributes.entrySet()) {
             lineLength += 1 + e.getKey().length() + 1 + e.getValue().length();
          }
+
+         // add " />".length
          lineLength += 3;
+
          log("- lineLength: " + lineLength);
 
+         // if the total length of the line fits in printWidth, keep it on one line
          oneLine = lineLength <= o.printWidth;
       }
       log("- oneLine: " + oneLine);
 
       writeTagStart(tagName, attributes, oneLine ? OneLineStatus.ONE_LINE : OneLineStatus.MULTIPLE_LINES);
 
+      // allow the bracket to be on the same line even in multi-line tags, using bracketSameLine
       w.write(oneLine || o.bracketSameLine ? " />" : "/>");
       w.write(o.endOfLine.string);
    }
@@ -96,14 +102,14 @@ public class Formatter implements Closeable {
    public void writeStartTag(final String tagName, final Map<String, String> attributes) throws IOException {
       log("writeStartTag");
       log("- tagName: " + tagName);
-      log("- attributes:");
-      for (final Map.Entry<String, String> e : attributes.entrySet()) {
-         log("  - " + e.getKey() + "=" + e.getValue());
-      }
 
+      // if we have a partial start tag, finish it and then add this as a child
       finishInProgressStuff();
 
+      // indent (important! we still use tabWidth even if you use tabs) + "<tagName".length
       int lineLength = indent * o.tabWidth + 1 + tagName.length();
+
+      // add length of all attributes
       for (final Map.Entry<String, String> e : attributes.entrySet()) {
          lineLength += 1 + e.getKey().length() + 1 + e.getValue().length();
       }
@@ -111,10 +117,20 @@ public class Formatter implements Closeable {
 
       final OneLineStatus oneLine;
       if (attributes.isEmpty() || lineLength + 3 <= o.printWidth) {
+         // ONE_LINE = guaranteed to fit on one line
+         // always use one line if there are zero attributes, even if the tag name is longer than the printWidth
+         // we use 'lineLength + 3' to account for the " />" if this tag ends up being empty
          oneLine = OneLineStatus.ONE_LINE;
       } else if (o.singleAttributePerLine || lineLength + 1 > o.printWidth) {
+         // MULTIPLE_LINES = guaranteed NOT to fit on one line, so split each attribute to its own line
+         // allow manually overriding to always use multiple lines with singleAttributePerLine
+         // we use 'lineLength + 1' to account for the ">" at the end of a normal start tag
          oneLine = OneLineStatus.MULTIPLE_LINES;
       } else {
+         // this case is for line lengths between the two above cases, so if the tag is empty and
+         // we have to add " />", the line will be longer than printWidth. but if we have a normal
+         // start tag that ends with ">", it WILL fit on one line. in this case, we skip writing
+         // attributes until after we know whether it's empty
          oneLine = OneLineStatus.ONE_LINE_UNLESS_EMPTY;
       }
       log("- oneLine: " + oneLine);
@@ -123,10 +139,15 @@ public class Formatter implements Closeable {
 
       startTagOneLine = oneLine;
 
+      // calculate the max length of a string so that the whole tag will fit in one line, like:
+      // <tagName>Some Text</tagName>
       if (oneLine == OneLineStatus.ONE_LINE) {
+         // add the closing ">", plus "</tagName>".length
          lineLength += 1 + 2 + tagName.length() + 1;
 
          maxChildStringOneLineLength = o.printWidth - lineLength;
+
+         // if the max string length is less than 1 character, don't allow it
          if (maxChildStringOneLineLength <= 0) {
             maxChildStringOneLineLength = null;
          }
@@ -134,19 +155,21 @@ public class Formatter implements Closeable {
    }
 
    public void writeTagStart(final String tagName, final Map<String, String> attributes, final OneLineStatus oneLine) throws IOException {
+      // precondition: currently on a new blank line, and there is no in-progress start tag (which is the postcondition of finishInProgressStuff)
+      // postcondition: the full state of a start/empty tag is either 1. printed to the Writer, or 2. stored in the state variables of this class
+
       log("  writeTagStart");
       log("  - tagName: " + tagName);
-      log("  - attributes:");
-      for (final Map.Entry<String, String> e : attributes.entrySet()) {
-         log("    - " + e.getKey() + "=" + e.getValue());
-      }
       log("  - oneLine: " + oneLine);
 
+      // indent the start tag
       writeIndent();
 
+      // write "<tagName"
       w.write('<');
       w.write(tagName);
 
+      // short-circuit in the event that there are no attributes
       if (attributes.isEmpty()) {
          log("  - empty attributes");
          return;
@@ -160,6 +183,7 @@ public class Formatter implements Closeable {
             writeAttributes(attributes, false);
             break;
          case ONE_LINE_UNLESS_EMPTY:
+            // don't write the attributes now, save them until we know whether the tag is one-line or not
             inProgressAttributes = attributes;
             break;
          default:
@@ -169,16 +193,15 @@ public class Formatter implements Closeable {
 
    public void writeAttributes(final Map<String, String> attributes, final boolean oneLine) throws IOException {
       log("    writeAttributes");
-      log("    - attributes:");
-      for (final Map.Entry<String, String> e : attributes.entrySet()) {
-         log("      - " + e.getKey() + "=" + e.getValue());
-      }
       log("    - oneLine: " + oneLine);
 
       indent++;
       log("    - indent++: " + indent);
 
+      log("    - attributes:");
       for (final Map.Entry<String, String> e : attributes.entrySet()) {
+         log("      - " + e.getKey() + "=" + e.getValue());
+
          if (oneLine) {
             w.write(' ');
          } else {
@@ -194,38 +217,52 @@ public class Formatter implements Closeable {
       indent--;
       log("    - indent--: " + indent);
 
+      // allow the bracket to be on the same line even in multi-line tags, using bracketSameLine
       if (!(oneLine || o.bracketSameLine)) {
          w.write(o.endOfLine.string);
          writeIndent();
       }
    }
 
+   /** If a start tag is partially-complete, this method finishes that start tag so that child elements may be added after. */
    public void finishInProgressStuff() throws IOException {
       finishInProgressStuff(null);
    }
 
    public void finishInProgressStuff(final String endTag) throws IOException {
+      // postcondition: currently on a new blank line, and there is no in-progress start tag
+
       log("  finishInProgressStuff");
       log("  - endTag: " + endTag);
 
       if (startTagOneLine == null) {
+         // this is the case where a start tag is NOT in progress
+         // because of that, we know we are already on a new blank line
+
          log("  - no text to consider");
          if (endTag != null) {
+            // if we're adding an end tag, write that now
+
             log("  - writing end tag");
 
+            // now that we're closing that tag, decrease the indent level
             indent--;
             log("  - indent--: " + indent);
             writeIndent();
 
+            // close the tag
             w.write("</");
             w.write(endTag);
             w.write('>');
 
+            // end on a new line
             w.write(o.endOfLine.string);
          }
 
          return;
       }
+
+      // the rest of this method is for dealing with an in-progress start tag
 
       final boolean emptyTag = childStringOneLine == null && endTag != null;
       log("  - emptyTag: " + emptyTag);
@@ -240,15 +277,23 @@ public class Formatter implements Closeable {
             break;
          case ONE_LINE_UNLESS_EMPTY:
             oneLine = !emptyTag;
+
+            // now we know whether the tag is empty or not, so we can write the in-progress attributes
+            // see writeStartTag for a deeper explanation
             writeAttributes(inProgressAttributes, oneLine);
+
             break;
          default:
             throw new IllegalArgumentException("Unexpected OneLineStatus: " + startTagOneLine);
       }
       log("  - oneLine: " + oneLine);
 
+      // if this is NOT an empty tag, add ">"
+      // if this is a one-line empty tag, add " />"
+      // if this is a multi-line empty tag, add "/>"
       w.write(!emptyTag ? ">" : oneLine ? " />" : "/>");
 
+      // increase indent now that the tag is closed, and use that for all children
       if (endTag == null) {
          indent++;
          log("  - indent++: " + indent);
@@ -258,7 +303,11 @@ public class Formatter implements Closeable {
       maxChildStringOneLineLength = null;
 
       if (childStringOneLine != null) {
+         // deal with the stored text
+
          if (endTag == null) {
+            // tag is not ending, so the stored text will be one of several children
+            // so we write it on a new, indented line
             w.write(o.endOfLine.string);
             writeIndent();
          }
@@ -268,6 +317,7 @@ public class Formatter implements Closeable {
          childStringOneLine = null;
 
          if (endTag != null) {
+            // if we're adding an end tag, write it here and decrease the indent
             indent--;
             log("  - indent--: " + indent);
 
@@ -278,6 +328,7 @@ public class Formatter implements Closeable {
          }
       }
 
+      // end on a new line
       w.write(o.endOfLine.string);
    }
 
@@ -291,8 +342,10 @@ public class Formatter implements Closeable {
    public void writeNewLine() throws IOException {
       log("writeNewLine");
 
+      // if we have a partial start tag, finish it and then add this as a child
       finishInProgressStuff();
 
+      // add the blank line
       w.write(o.endOfLine.string);
    }
 
@@ -300,6 +353,7 @@ public class Formatter implements Closeable {
       log("writeText");
       log("- text: " + stringify(text));
 
+      // if the in-progress start tag is one-line and this text could fit and still be a single line, store it for later
       if (
          maxChildStringOneLineLength != null &&
          text.length() <= maxChildStringOneLineLength &&
@@ -307,17 +361,20 @@ public class Formatter implements Closeable {
       ) {
          log("- saving text for later");
 
+         // make sure to set maxChildStringOneLineLength to null so that we don't end up with multiple strings
          maxChildStringOneLineLength = null;
          childStringOneLine = text;
          return;
       }
 
+      // if we have a partial start tag, finish it and then add this as a child
       finishInProgressStuff();
 
       log("- writing text");
       writeIndent();
       w.write(text);
 
+      // end on a new line
       w.write(o.endOfLine.string);
    }
 

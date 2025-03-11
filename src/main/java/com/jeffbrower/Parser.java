@@ -26,15 +26,22 @@ public class Parser implements Closeable {
 
    // base parsing methods
 
+   /** Parse the entire input and write the entire output. */
    public void parseAll() throws IOException {
       while (parseOneStep()) {
          // keep going
       }
    }
 
+   /**
+    * Parse one step, meaning consume one element or text node. Useful for incremental processing, like in a format-checking context.
+    *
+    * @return true if there is more to parse, false if we've reached the end of the file
+    */
    public boolean parseOneStep() throws IOException {
       final int c = r.read();
       if (c == -1) {
+         // reached EOF
          return false;
       }
 
@@ -43,33 +50,44 @@ public class Parser implements Closeable {
          return true;
       }
 
+      // if the character wasn't a '<', push it back onto the Reader
       r.unread(c);
 
+      // the raw character data, without any trimming
       final String rawCharData = parseCharData(null);
 
+      // the data with leading whitespace trimmed
       final String charDataTrimStart = rawCharData.stripLeading();
       if (charDataTrimStart.isEmpty()) {
+         // string was entirely whitespace
          if (hasMultipleNewlines(rawCharData)) {
+            // an entirely-whitespace string still produces a newline if it contained multiple newlines
+            // this is how we can preserve blank lines between elements (though we only preserve 1, by design)
             f.writeNewLine();
          } else {
             log("empty char data: " + stringify(rawCharData));
          }
+         // not EOF yet
          return true;
       }
 
       final String whitespacePrefix = rawCharData.substring(0, rawCharData.length() - charDataTrimStart.length());
       if (hasMultipleNewlines(whitespacePrefix)) {
+         // if there were multiple newlines at the beginning of this text, add a blank line before the text
          f.writeNewLine();
       }
 
+      // print the trimmed text. we don't alter the indentation or wrapping if the text itself was multiple lines
       final String charData = charDataTrimStart.stripTrailing();
       f.writeText(charData);
 
       final String whitespaceSuffix = charDataTrimStart.substring(charData.length());
       if (hasMultipleNewlines(whitespaceSuffix)) {
+         // if there were multiple newlines at the end of this text, add a blank line after the text
          f.writeNewLine();
       }
 
+      // not EOF yet
       return true;
    }
 
@@ -79,30 +97,36 @@ public class Parser implements Closeable {
 
       final StringBuilder b = new StringBuilder();
       while (true) {
+         // allow this method to stop when it reaches a certain pattern, like ending an attribute when you encounter the closing ' or "
          if (
             end != null &&
             b.length() >= end.length() &&
             b.substring(b.length() - end.length()).equals(end)
          ) {
+            // trim the 'end' off the string, since it was known ahead of time, and only return the inside of the CharData
             b.setLength(b.length() - end.length());
             break;
          }
 
          final int c = r.read();
          if (c == -1) {
+            // EOF, exit
             break;
          }
 
          if (c == '<') {
+            // push the '<' back onto the Reader, and end this CharData
             r.unread('<');
             break;
          }
 
          if (c == '&') {
+            // parse the reference
             b.append(parseReference());
             continue;
          }
 
+         // append the character if it was not a reserved character
          b.append((char) c);
       }
 
@@ -110,16 +134,8 @@ public class Parser implements Closeable {
    }
 
    private static boolean hasMultipleNewlines(final String s) {
-      boolean foundOne = false;
-      for (int i = 0; i < s.length(); i++) {
-         if (s.charAt(i) == '\n') {
-            if (foundOne) {
-               return true;
-            }
-            foundOne = true;
-         }
-      }
-      return false;
+      final int i = s.indexOf('\n');
+      return i != -1 && s.indexOf('\n', i + 1) != -1;
    }
 
    private String parseReference() throws IOException {
@@ -129,9 +145,13 @@ public class Parser implements Closeable {
       int c = r.read();
 
       if (c != '#') {
+         // named reference, like &nbsp;
+
+         // push the character back onto the Reader so it's part of 'name'
          r.unread(c);
          final String name = parseName();
 
+         // must end with ';'
          c = r.read();
          if (c != ';') {
             throw new IllegalStateException("Expected end of reference: " + c);
@@ -146,10 +166,12 @@ public class Parser implements Closeable {
 
       c = r.read();
       if (c == 'x') {
+         // if the reference starts with "&#x", use hex digits
          b.append('x');
          digitTest = Parser::isHexDigit;
          c = r.read();
       } else {
+         // otherwise, normal decimal digits
          r.unread(c);
          digitTest = Parser::isDigit;
       }
@@ -161,10 +183,12 @@ public class Parser implements Closeable {
          c = r.read();
       }
 
+      // must have at least 1 digit
       if (!anyDigits) {
          throw new IllegalStateException("Expected digits: " + c);
       }
 
+      // must end with ';', and we can re-use the last read character since it failed 'digitTest'
       if (c != ';') {
          throw new IllegalStateException("Expected end of reference: " + c);
       }
@@ -172,10 +196,12 @@ public class Parser implements Closeable {
       return b.append(';').toString();
    }
 
+   /** @return true if the character is a decimal digit */
    private static boolean isDigit(final int c) {
       return c >= '0' && c <= '9';
    }
 
+   /** @return true if the character is a hexadecimal digit */
    private static boolean isHexDigit(final int c) {
       return isDigit(c) || c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z';
    }
@@ -188,15 +214,19 @@ public class Parser implements Closeable {
       final StringBuilder b = new StringBuilder();
 
       int c = r.read();
+
+      // require at least 1 character, and must start with a "name start character"
       if (!isNameStartChar(c)) {
          throw new IllegalStateException("Expected name start character: " + c);
       }
 
+      // rest of characters must be "name characters"
       do {
          b.append((char) c);
          c = r.read();
       } while (isNameChar(c));
 
+      // push last non-name-character back onto Reader (unless we're at EOF)
       if (c != -1) {
          r.unread(c);
       }
@@ -204,6 +234,7 @@ public class Parser implements Closeable {
       return b.toString();
    }
 
+   /** @return true if the character is a valid XML1.1 name start character */
    private static boolean isNameStartChar(final int c) {
       return c == ':' ||
              c >= 'A' && c <= 'Z' ||
@@ -222,6 +253,7 @@ public class Parser implements Closeable {
              c >= 0xFDF0 && c <= 0xFFFD;
    }
 
+   /** @return true if the character is a valid XML1.1 name character */
    private static boolean isNameChar(final int c) {
       return isNameStartChar(c) ||
              c == '-' ||
@@ -232,6 +264,7 @@ public class Parser implements Closeable {
              c >= 0x203F && c <= 0x2040;
    }
 
+   /** The return value of this method contains the parsed whitespace, but we never actually care about it in most cases. */
    private String parseWhitespace() throws IOException {
       // https://www.w3.org/TR/xml11/#NT-S
 
@@ -242,6 +275,7 @@ public class Parser implements Closeable {
          b.append((char) c);
       }
 
+      // push the non-whitespace character back onto the Reader (unless we're at EOF)
       if (c != -1) {
          r.unread(c);
       }
@@ -249,6 +283,7 @@ public class Parser implements Closeable {
       return b.length() == 0 ? null : b.toString();
    }
 
+   /** @return true if the character is a valid XML1.1 whitespace character */
    private static boolean isWhitespace(final int c) {
       switch (c) {
          case 0x20:
@@ -269,22 +304,27 @@ public class Parser implements Closeable {
          throw new IllegalStateException("Unclosed tag");
       }
 
+      // xml declaraions and PI tags
       if (c == '?') {
          parseQuestionTag();
          return;
       }
 
+      // comments, CDATA, and DOCTYPE tags
       if (c == '!') {
          parseExclamationTag();
          return;
       }
 
+      // end tags
       if (c == '/') {
          parseEndTag();
          return;
       }
 
+      // push the non-special character back onto the Reader and parse it as a standard tag
       r.unread(c);
+
       parseStartTag();
    }
 
@@ -293,17 +333,22 @@ public class Parser implements Closeable {
       // EmptyElemTag - https://www.w3.org/TR/xml11/#NT-EmptyElemTag <xxx ... />
       // STag - https://www.w3.org/TR/xml11/#NT-STag <xxx ... >
 
+      // get tag name
       final String tagName = parseName();
 
+      // using LinkedHashMap to preserve the order of attributes
       final Map<String, String> attributes = new LinkedHashMap<>();
 
       int c;
       while (true) {
+         // there is mandatory whitespace before the first attribute and between attributes
+         // though, in our parser, it won't be strictly required between attributes
          parseWhitespace();
 
          c = r.read();
 
          if (c == '/') {
+            // empty tag
             c = r.read();
             if (c != '>') {
                throw new IllegalStateException("Expected '>': " + c);
@@ -314,14 +359,18 @@ public class Parser implements Closeable {
          }
 
          if (c == '>') {
+            // normal start tag
             f.writeStartTag(tagName, attributes);
             return;
          }
 
+         // not a special character, so push it back onto the Reader
          r.unread(c);
 
+         // parse the attribute name
          final String key = parseName();
 
+         // there's optional whitespace before the '=' of an attribute
          parseWhitespace();
 
          c = r.read();
@@ -329,15 +378,22 @@ public class Parser implements Closeable {
             throw new IllegalStateException("Expected '=': " + c);
          }
 
+         // there's optional whitespace after the '=' of an attribute
          parseWhitespace();
 
+         // XML attributes can be single or double quoted, we'll allow either, and preserve which one was used
+         // in order to fully support prettier's style of quoting strings, we'd need to parse the xml entity
+         // references (&apos;, etc.) in strings, and replace them with their normal characters, but that adds
+         // a non-trivial amount of complexity to this code, so we're going to skip it and call it "good enough"
          final int quote = r.read();
          if (quote != '"' && quote != '\'') {
             throw new IllegalStateException("Expected '\"' or '\\'': " + quote);
          }
 
+         // this isn't technically CharData in the spec, but it should work in all but the most obscure edge cases
          final String value = parseCharData(String.valueOf((char) quote));
 
+         // construct the full value string, including the quotes
          attributes.put(key, ((char) quote) + value + ((char) quote));
       }
    }
@@ -348,6 +404,7 @@ public class Parser implements Closeable {
 
       final String tagName = parseName();
 
+      // there's optional whitespace after the tag name in closing tags
       parseWhitespace();
 
       final int c = r.read();
