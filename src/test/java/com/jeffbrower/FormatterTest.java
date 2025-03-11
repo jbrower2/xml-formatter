@@ -1,5 +1,6 @@
 package com.jeffbrower;
 
+import static com.jeffbrower.Logger.log;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.IOException;
@@ -34,22 +35,20 @@ public class FormatterTest {
 
       final FormatOptions o = new FormatOptions();
       o.useTabs = true;
-      o.endOfLine = LineEnding.SYSTEM;
 
       try (
          final StringWriter w = new StringWriter();
-         final Formatter f = new Formatter(new PushbackReader(new StringReader(in)), w, o)
+         final Formatter f = new Formatter(w, o);
+         final Parser p = new Parser(new PushbackReader(new StringReader(in)), f)
       ) {
-         while (f.parseAny()) {
+         while (p.parseAny()) {
             // keep going
 
-            if (Formatter.DEBUG) {
-               System.out.println("=".repeat(100));
-               System.out.println(w.toString() + "|");
-               System.out.println("=".repeat(100));
-               f.printDebugInfo();
-               System.out.println("=".repeat(100));
-            }
+            log("=".repeat(100));
+            log(w.toString() + "|");
+            log("=".repeat(100));
+            f.printDebugInfo();
+            log("=".repeat(100));
          }
 
          assertEquals(out, w.toString());
