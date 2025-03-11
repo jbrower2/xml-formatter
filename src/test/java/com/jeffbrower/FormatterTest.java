@@ -22,6 +22,7 @@ public class FormatterTest {
       "test4",
       "test5",
       "test6",
+      "test7",
    })
    void test(final String baseName) throws IOException {
       final String in, out;
@@ -35,22 +36,29 @@ public class FormatterTest {
 
       final FormatOptions o = new FormatOptions();
 
-      try (
-         final StringWriter w = new StringWriter();
-         final Formatter f = new Formatter(w, o);
-         final Parser p = new Parser(new PushbackReader(new StringReader(in)), f)
-      ) {
-         while (p.parseOneStep()) {
-            // keep going
-
-            log("=".repeat(100));
-            log(w.toString() + "|");
-            log("=".repeat(100));
-            f.printDebugInfo();
-            log("=".repeat(100));
+      for (final String testString : new String[] {
+         // verify formatting properly with 'in' -> 'out'
+         in,
+         // verify stable by checking that 'out' -> 'out'
+         out,
+       }) {
+         try (
+            final StringWriter w = new StringWriter();
+            final Formatter f = new Formatter(w, o);
+            final Parser p = new Parser(new PushbackReader(new StringReader(testString)), f)
+         ) {
+            while (p.parseOneStep()) {
+               // keep going
+   
+               log("=".repeat(100));
+               log(w.toString() + "|");
+               log("=".repeat(100));
+               f.printDebugInfo();
+               log("=".repeat(100));
+            }
+   
+            assertEquals(out, w.toString());
          }
-
-         assertEquals(out, w.toString());
       }
    }
 }

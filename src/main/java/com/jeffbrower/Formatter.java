@@ -315,10 +315,7 @@ public class Formatter implements Closeable {
          childStringOneLine = null;
 
          if (endTag != null) {
-            // if we're adding an end tag, write it here and decrease the indent
-            indent--;
-            log("  - indent--: " + indent);
-
+            // if we're adding an end tag, write it here
             log("  - writing end tag");
             w.write("</");
             w.write(endTag);
