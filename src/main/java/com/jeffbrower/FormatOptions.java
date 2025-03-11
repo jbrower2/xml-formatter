@@ -25,7 +25,7 @@ public class FormatOptions {
     *
     * @see https://prettier.io/docs/options#tabs
     */
-   public boolean useTabs = false;
+   public boolean useTabs = true;
 
    /**
     * Put the `>` of a multi-line element at the end of the last line instead of being alone on the

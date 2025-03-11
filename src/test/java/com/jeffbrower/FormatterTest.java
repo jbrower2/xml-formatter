@@ -34,7 +34,6 @@ public class FormatterTest {
       }
 
       final FormatOptions o = new FormatOptions();
-      o.useTabs = true;
 
       try (
          final StringWriter w = new StringWriter();
