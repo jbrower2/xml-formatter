@@ -6,7 +6,7 @@ import static com.jeffbrower.Logger.stringify;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.Writer;
-import java.util.Map;
+import java.util.List;
 
 public class Formatter implements Closeable {
    private final Writer w;
@@ -44,7 +44,7 @@ public class Formatter implements Closeable {
    /**
     * Attributes of the start tag, if startTagOneLine=ONE_LINE_UNLESS_EMPTY. We can't write them until we know what the format is.
     */
-   private Map<String, String> inProgressAttributes = null;
+   private List<String> inProgressAttributes = null;
 
    /**
     * If null: a tag is not in progress (or the in-progress tag is not one-line)
@@ -62,7 +62,7 @@ public class Formatter implements Closeable {
       w.write(o.useTabs ? "\t".repeat(indent) : " ".repeat(indent * o.tabWidth));
    }
 
-   public void writeEmptyTag(final String tagName, final Map<String, String> attributes) throws IOException {
+   public void writeEmptyTag(final String tagName, final List<String> attributes) throws IOException {
       log("writeEmptyTag");
       log("- tagName: " + tagName);
 
@@ -78,8 +78,8 @@ public class Formatter implements Closeable {
          int lineLength = indent * o.tabWidth + 1 + tagName.length();
 
          // add length of all attributes
-         for (final Map.Entry<String, String> e : attributes.entrySet()) {
-            lineLength += 1 + e.getKey().length() + 1 + e.getValue().length();
+         for (final String attribute : attributes) {
+            lineLength += 1 + attribute.length();
          }
 
          // add " />".length
@@ -99,7 +99,7 @@ public class Formatter implements Closeable {
       w.write(o.endOfLine.string);
    }
 
-   public void writeStartTag(final String tagName, final Map<String, String> attributes) throws IOException {
+   public void writeStartTag(final String tagName, final List<String> attributes) throws IOException {
       log("writeStartTag");
       log("- tagName: " + tagName);
 
@@ -110,8 +110,8 @@ public class Formatter implements Closeable {
       int lineLength = indent * o.tabWidth + 1 + tagName.length();
 
       // add length of all attributes
-      for (final Map.Entry<String, String> e : attributes.entrySet()) {
-         lineLength += 1 + e.getKey().length() + 1 + e.getValue().length();
+      for (final String attribute : attributes) {
+         lineLength += 1 + attribute.length();
       }
       log("- lineLength: " + lineLength);
 
@@ -154,7 +154,7 @@ public class Formatter implements Closeable {
       }
    }
 
-   public void writeTagStart(final String tagName, final Map<String, String> attributes, final OneLineStatus oneLine) throws IOException {
+   public void writeTagStart(final String tagName, final List<String> attributes, final OneLineStatus oneLine) throws IOException {
       // precondition: currently on a new blank line, and there is no in-progress start tag (which is the postcondition of finishInProgressStuff)
       // postcondition: the full state of a start/empty tag is either 1. printed to the Writer, or 2. stored in the state variables of this class
 
@@ -191,7 +191,7 @@ public class Formatter implements Closeable {
       }
    }
 
-   public void writeAttributes(final Map<String, String> attributes, final boolean oneLine) throws IOException {
+   public void writeAttributes(final List<String> attributes, final boolean oneLine) throws IOException {
       log("    writeAttributes");
       log("    - oneLine: " + oneLine);
 
@@ -199,8 +199,8 @@ public class Formatter implements Closeable {
       log("    - indent++: " + indent);
 
       log("    - attributes:");
-      for (final Map.Entry<String, String> e : attributes.entrySet()) {
-         log("      - " + e.getKey() + "=" + e.getValue());
+      for (final String attribute : attributes) {
+         log("      - " + attribute);
 
          if (oneLine) {
             w.write(' ');
@@ -209,9 +209,7 @@ public class Formatter implements Closeable {
             writeIndent();
          }
 
-         w.write(e.getKey());
-         w.write('=');
-         w.write(e.getValue());
+         w.write(attribute);
       }
 
       indent--;

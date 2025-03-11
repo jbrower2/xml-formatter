@@ -6,8 +6,8 @@ import static com.jeffbrower.Logger.stringify;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.PushbackReader;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.IntPredicate;
 
 public class Parser implements Closeable {
@@ -336,8 +336,8 @@ public class Parser implements Closeable {
       // get tag name
       final String tagName = parseName();
 
-      // using LinkedHashMap to preserve the order of attributes
-      final Map<String, String> attributes = new LinkedHashMap<>();
+      // store attributes as strings, like 'key="value"'
+      final List<String> attributes = new ArrayList<>();
 
       int c;
       while (true) {
@@ -389,12 +389,13 @@ public class Parser implements Closeable {
          if (quote != '"' && quote != '\'') {
             throw new IllegalStateException("Expected '\"' or '\\'': " + quote);
          }
+         final String quoteString = String.valueOf((char) quote);
 
          // this isn't technically CharData in the spec, but it should work in all but the most obscure edge cases
-         final String value = parseCharData(String.valueOf((char) quote));
+         final String value = parseCharData(quoteString);
 
-         // construct the full value string, including the quotes
-         attributes.put(key, ((char) quote) + value + ((char) quote));
+         // construct the full attribute string, including the key, '=', quotes, and value
+         attributes.add(key + '=' + quoteString + value + quoteString);
       }
    }
 
