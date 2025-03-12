@@ -9,8 +9,13 @@ import java.io.PushbackReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.IntPredicate;
+import java.util.regex.Pattern;
 
 public class Parser implements Closeable {
+   private static Pattern VERSION = Pattern.compile("(['\"])1\\.\\d+\\1");
+   private static Pattern ENCODING = Pattern.compile("(['\"])UTF-8\\1");
+   private static Pattern STANDALONE = Pattern.compile("(['\"])(?:yes|no)\\1");
+
    private final PushbackReader r;
    private final Formatter f;
 
@@ -92,9 +97,11 @@ public class Parser implements Closeable {
    }
 
    private String parseCharData(final String end) throws IOException {
-      // https://www.w3.org/TR/xml11/#NT-CharData
       // note: this implementation allows CharData to contain References
+      // 1.0: https://www.w3.org/TR/xml/#NT-CharData
+      // 1.1: https://www.w3.org/TR/xml11/#NT-CharData
 
+      boolean ended = false;
       final StringBuilder b = new StringBuilder();
       while (true) {
          // allow this method to stop when it reaches a certain pattern, like ending an attribute when you encounter the closing ' or "
@@ -105,6 +112,7 @@ public class Parser implements Closeable {
          ) {
             // trim the 'end' off the string, since it was known ahead of time, and only return the inside of the CharData
             b.setLength(b.length() - end.length());
+            ended = true;
             break;
          }
 
@@ -130,6 +138,10 @@ public class Parser implements Closeable {
          b.append((char) c);
       }
 
+      if (end != null && !ended) {
+         throw new IllegalStateException("Expected '" + end + "' but string ended otherwise");
+      }
+
       return b.toString();
    }
 
@@ -140,7 +152,8 @@ public class Parser implements Closeable {
 
    private String parseReference() throws IOException {
       // precondition: already read: "&"
-      // https://www.w3.org/TR/xml11/#NT-Reference
+      // 1.0: https://www.w3.org/TR/xml/#NT-Reference
+      // 1.1: https://www.w3.org/TR/xml11/#NT-Reference
 
       int c = r.read();
 
@@ -152,10 +165,7 @@ public class Parser implements Closeable {
          final String name = parseName();
 
          // must end with ';'
-         c = r.read();
-         if (c != ';') {
-            throw new IllegalStateException("Expected end of reference: " + c);
-         }
+         assertCharacter(';');
 
          return "&" + name + ";";
       }
@@ -189,9 +199,7 @@ public class Parser implements Closeable {
       }
 
       // must end with ';', and we can re-use the last read character since it failed 'digitTest'
-      if (c != ';') {
-         throw new IllegalStateException("Expected end of reference: " + c);
-      }
+      assertCharacter(c, ';');
 
       return b.append(';').toString();
    }
@@ -209,7 +217,8 @@ public class Parser implements Closeable {
    // main parsing methods
 
    private String parseName() throws IOException {
-      // https://www.w3.org/TR/xml11/#NT-Name
+      // 1.0: https://www.w3.org/TR/xml/#NT-Name
+      // 1.1: https://www.w3.org/TR/xml11/#NT-Name
 
       final StringBuilder b = new StringBuilder();
 
@@ -266,7 +275,8 @@ public class Parser implements Closeable {
 
    /** The return value of this method contains the parsed whitespace, but we never actually care about it in most cases. */
    private String parseWhitespace() throws IOException {
-      // https://www.w3.org/TR/xml11/#NT-S
+      // 1.0: https://www.w3.org/TR/xml/#NT-S
+      // 1.1: https://www.w3.org/TR/xml11/#NT-S
 
       final StringBuilder b = new StringBuilder();
 
@@ -306,13 +316,13 @@ public class Parser implements Closeable {
 
       // xml declaraions and PI tags
       if (c == '?') {
-         parseQuestionTag();
+         parseQuestion();
          return;
       }
 
       // comments, CDATA, and DOCTYPE tags
       if (c == '!') {
-         parseExclamationTag();
+         parseExclamation();
          return;
       }
 
@@ -330,8 +340,10 @@ public class Parser implements Closeable {
 
    private void parseStartTag() throws IOException {
       // precondition: already read: "<"
-      // EmptyElemTag - https://www.w3.org/TR/xml11/#NT-EmptyElemTag <xxx ... />
-      // STag - https://www.w3.org/TR/xml11/#NT-STag <xxx ... >
+      // empty tag 1.0: https://www.w3.org/TR/xml/#NT-EmptyElemTag
+      // empty tag 1.1: https://www.w3.org/TR/xml11/#NT-EmptyElemTag
+      // start tag 1.0: https://www.w3.org/TR/xml/#NT-STag
+      // start tag 1.1: https://www.w3.org/TR/xml11/#NT-STag
 
       // get tag name
       final String tagName = parseName();
@@ -349,10 +361,7 @@ public class Parser implements Closeable {
 
          if (c == '/') {
             // empty tag
-            c = r.read();
-            if (c != '>') {
-               throw new IllegalStateException("Expected '>': " + c);
-            }
+            assertCharacter('>');
 
             f.writeEmptyTag(tagName, attributes);
             return;
@@ -370,68 +379,302 @@ public class Parser implements Closeable {
          // parse the attribute name
          final String key = parseName();
 
-         // there's optional whitespace before the '=' of an attribute
+         // there's optional whitespace around the '=' of an attribute
+         parseWhitespace();
+         assertCharacter('=');
          parseWhitespace();
 
-         c = r.read();
-         if (c != '=') {
-            throw new IllegalStateException("Expected '=': " + c);
-         }
-
-         // there's optional whitespace after the '=' of an attribute
-         parseWhitespace();
-
-         // XML attributes can be single or double quoted, we'll allow either, and preserve which one was used
-         // in order to fully support prettier's style of quoting strings, we'd need to parse the xml entity
-         // references (&apos;, etc.) in strings, and replace them with their normal characters, but that adds
-         // a non-trivial amount of complexity to this code, so we're going to skip it and call it "good enough"
-         final int quote = r.read();
-         if (quote != '"' && quote != '\'') {
-            throw new IllegalStateException("Expected '\"' or '\\'': " + quote);
-         }
-         final String quoteString = String.valueOf((char) quote);
-
-         // this isn't technically CharData in the spec, but it should work in all but the most obscure edge cases
-         final String value = parseCharData(quoteString);
+         // get the value including quotes
+         final String quotedValue = parseString();
 
          // construct the full attribute string, including the key, '=', quotes, and value
-         attributes.add(key + '=' + quoteString + value + quoteString);
+         attributes.add(key + '=' + quotedValue);
       }
+   }
+
+   private String parseString() throws IOException {
+      // XML attributes can be single or double quoted, we'll allow either, and preserve which one was used
+      // in order to fully support prettier's style of quoting strings, we'd need to parse the xml entity
+      // references (&apos;, etc.) in strings, and replace them with their normal characters, but that adds
+      // a non-trivial amount of complexity to this code, so we're going to skip it and call it "good enough"
+      final int quote = r.read();
+      if (quote != '"' && quote != '\'') {
+         throw new IllegalStateException("Expected '\"' or '\\'': " + quote);
+      }
+      final String quoteString = String.valueOf((char) quote);
+
+      // this isn't technically CharData in the spec, but it should work in all but the most obscure edge cases
+      final String value = parseCharData(quoteString);
+
+      return quoteString + value + quoteString;
    }
 
    private void parseEndTag() throws IOException {
       // precondition: already read: "</"
-      // https://www.w3.org/TR/xml11/#NT-ETag
+      // 1.0: https://www.w3.org/TR/xml/#NT-ETag
+      // 1.1: https://www.w3.org/TR/xml11/#NT-ETag
 
       final String tagName = parseName();
 
       // there's optional whitespace after the tag name in closing tags
       parseWhitespace();
 
-      final int c = r.read();
-      if (c != '>') {
-         throw new IllegalStateException("Expected '>': " + c);
-      }
+      assertCharacter('>');
 
       f.writeEndTag(tagName);
    }
 
-   private void parseQuestionTag() throws IOException {
+   private void parseQuestion() throws IOException {
       // precondition: already read: "<?"
 
-      // XMLDecl - https://www.w3.org/TR/xml11/#NT-XMLDecl - <?xml ... ?>
-      // PI - https://www.w3.org/TR/xml11/#NT-PI - <? ... ?>
-
-      throw new UnsupportedOperationException("TODO xml declarations/PI tags are not implemented");
+      final String target = parseName();
+      if ("xml".equals(target)) {
+         parseXmlDeclaration();
+      } else if ("xml".equalsIgnoreCase(target)) {
+         throw new IllegalStateException("Processing Instruction cannot be case-insensitive \"xml\": " + target);
+      } else {
+         parseProcessingInstruction(target);
+      }
    }
 
-   private void parseExclamationTag() throws IOException {
+   private void parseXmlDeclaration() throws IOException {
+      // precondition: already read: "<?xml"
+      // 1.0: https://www.w3.org/TR/xml/#NT-XMLDecl
+      // 1.1: https://www.w3.org/TR/xml11/#NT-XMLDecl
+
+      final StringBuilder b = new StringBuilder("xml");
+
+      // required space before version info
+      parseWhitespace();
+
+      // XML version is required
+      assertCharacter('v');
+      assertCharacter('e');
+      assertCharacter('r');
+      assertCharacter('s');
+      assertCharacter('i');
+      assertCharacter('o');
+      assertCharacter('n');
+
+      // optional whitespace around '='
+      parseWhitespace();
+      assertCharacter('=');
+      parseWhitespace();
+
+      final String version = parseString();
+      if (!VERSION.matcher(version).matches()) {
+         throw new IllegalStateException("Unexpected version: " + version);
+      }
+      b.append(" version=");
+      b.append(version);
+
+      parseWhitespace();
+
+      int c = r.read();
+
+      if (c == 'e') {
+         assertCharacter('n');
+         assertCharacter('c');
+         assertCharacter('o');
+         assertCharacter('d');
+         assertCharacter('i');
+         assertCharacter('n');
+         assertCharacter('g');
+
+         // optional whitespace around '='
+         parseWhitespace();
+         assertCharacter('=');
+         parseWhitespace();
+
+         final String encoding = parseString();
+         if (!ENCODING.matcher(encoding).matches()) {
+            throw new IllegalStateException("Only UTF-8 is supported: " + encoding);
+         }
+         b.append(" encoding=");
+         b.append(encoding);
+
+         parseWhitespace();
+         c = r.read();
+      }
+
+      if (c == 's') {
+         assertCharacter('t');
+         assertCharacter('a');
+         assertCharacter('n');
+         assertCharacter('d');
+         assertCharacter('a');
+         assertCharacter('l');
+         assertCharacter('o');
+         assertCharacter('n');
+         assertCharacter('e');
+
+         // optional whitespace around '='
+         parseWhitespace();
+         assertCharacter('=');
+         parseWhitespace();
+
+         final String standalone = parseString();
+         if (!STANDALONE.matcher(standalone).matches()) {
+            throw new IllegalStateException("Only yes/no are allowed: " + standalone);
+         }
+         b.append(" standalone=");
+         b.append(standalone);
+
+         parseWhitespace();
+         c = r.read();
+      }
+
+      assertCharacter(c, '?');
+      assertCharacter('>');
+
+      f.writeProcessingInstruction(b.toString());
+   }
+
+   private void parseProcessingInstruction(final String target) throws IOException {
+      // precondition: already read: "<?{target}"
+      // 1.0: https://www.w3.org/TR/xml/#NT-PI
+      // 1.1: https://www.w3.org/TR/xml11/#NT-PI
+
+      final StringBuilder b = new StringBuilder(target);
+
+      // parse processing instruction contents
+      boolean lastQuestion = false;
+      while (true) {
+         final int c = r.read();
+
+         if (c == '?') {
+            // keep track of consecutive ']'s
+            lastQuestion = true;
+         } else {
+            if (lastQuestion && c == '>') {
+               // found "?>", end the processing instruction
+               b.setLength(b.length() - 1);
+               break;
+            }
+
+            lastQuestion = false;
+         }
+
+         b.append((char) c);
+      }
+
+      f.writeProcessingInstruction(b.toString());
+   }
+
+   private void parseExclamation() throws IOException {
       // precondition: already read: "<!"
 
-      // doctypedecl - https://www.w3.org/TR/xml11/#NT-doctypedecl - <!DOCTYPE ... >
-      // CDSect - https://www.w3.org/TR/xml11/#NT-CDSect - <![CDATA[ ... ]]>
-      // Comment - https://www.w3.org/TR/xml11/#NT-Comment <!-- ... -->
+      final int c = r.read();
+      switch (c) {
+         case 'D':
+            assertCharacter('O');
+            assertCharacter('C');
+            assertCharacter('T');
+            assertCharacter('Y');
+            assertCharacter('P');
+            assertCharacter('E');
+            parseDoctype();
+            break;
+            case '[':
+            assertCharacter('C');
+            assertCharacter('D');
+            assertCharacter('A');
+            assertCharacter('T');
+            assertCharacter('A');
+            assertCharacter('[');
+            parseCdata();
+            break;
+         case '-':
+            assertCharacter('-');
+            parseComment();
+            break;
+         default:
+            throw new IllegalStateException("Unexpected exclamation tag: " + c);
+      }
+   }
 
-      throw new UnsupportedOperationException("TODO comments/cdada/doctype tags are not implemented");
+   private void parseDoctype() throws IOException {
+      // precondition: already read: "<!DOCTYPE"
+      // 1.0: https://www.w3.org/TR/xml/#NT-doctypedecl
+      // 1.1: https://www.w3.org/TR/xml11/#NT-doctypedecl
+
+      throw new UnsupportedOperationException("DOCTYPE declarations are not implemented");
+   }
+
+   private void parseCdata() throws IOException {
+      // precondition: already read: "<![CDATA["
+      // 1.0: https://www.w3.org/TR/xml/#NT-CDSect
+      // 1.1: https://www.w3.org/TR/xml11/#NT-CDSect
+
+      final StringBuilder b = new StringBuilder();
+
+      // parse cdata contents
+      int bracketCount = 0;
+      while (true) {
+         final int c = r.read();
+
+         if (c == ']') {
+            // keep track of consecutive ']'s
+            bracketCount++;
+         } else {
+            if (bracketCount == 2 && c == '>') {
+               // found "]]>", end the cdata
+               b.setLength(b.length() - 2);
+               break;
+            }
+
+            bracketCount = 0;
+         }
+
+         b.append((char) c);
+      }
+
+      f.writeCdata(b.toString());
+   }
+
+   private void parseComment() throws IOException {
+      // precondition: already read: "<!--"
+      // 1.0: https://www.w3.org/TR/xml/#NT-Comment
+      // 1.1: https://www.w3.org/TR/xml11/#NT-Comment
+
+      final StringBuilder b = new StringBuilder();
+
+      // parse comment contents
+      int dashCount = 0;
+      while (true) {
+         final int c = r.read();
+
+         if (c == '-') {
+            // keep track of consecutive '-'s
+            dashCount++;
+         } else {
+            if (dashCount == 2) {
+               if (c != '>') {
+                  // the xml spec doesn't allow "--" in comments
+                  throw new IllegalStateException("'--' is not permitted in comments");
+               }
+   
+               // found "-->", end the comment
+               b.setLength(b.length() - 2);
+               break;
+            }
+
+            dashCount = 0;
+         }
+
+         b.append((char) c);
+      }
+
+      f.writeComment(b.toString());
+   }
+
+   private void assertCharacter(final char expected) throws IOException {
+      assertCharacter(r.read(), expected);
+   }
+
+   private void assertCharacter(final int actual, final char expected) {
+      if (actual != expected) {
+         throw new IllegalStateException("Expected '" + expected + "': " + actual);
+      }
    }
 }

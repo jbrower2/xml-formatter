@@ -373,6 +373,54 @@ public class Formatter implements Closeable {
       w.write(o.endOfLine.string);
    }
 
+   public void writeProcessingInstruction(final String contents) throws IOException {
+      log("writeProcessingInstruction");
+      log("- contents: " + stringify(contents));
+
+      // if we have a partial start tag, finish it and then add this as a child
+      finishInProgressStuff();
+
+      writeIndent();
+      w.write("<?");
+      w.write(contents);
+      w.write("?>");
+
+      // end on a new line
+      w.write(o.endOfLine.string);
+   }
+
+   public void writeCdata(final String contents) throws IOException {
+      log("writeCdata");
+      log("- contents: " + stringify(contents));
+
+      // if we have a partial start tag, finish it and then add this as a child
+      finishInProgressStuff();
+
+      writeIndent();
+      w.write("<![CDATA[");
+      w.write(contents);
+      w.write("]]>");
+
+      // end on a new line
+      w.write(o.endOfLine.string);
+   }
+
+   public void writeComment(final String contents) throws IOException {
+      log("writeComment");
+      log("- contents: " + stringify(contents));
+
+      // if we have a partial start tag, finish it and then add this as a child
+      finishInProgressStuff();
+
+      writeIndent();
+      w.write("<!--");
+      w.write(contents);
+      w.write("-->");
+
+      // end on a new line
+      w.write(o.endOfLine.string);
+   }
+
    public void printDebugInfo() {
       log("- indent: " + indent);
       log("- startTagOneLine: " + startTagOneLine);
