@@ -5,10 +5,17 @@ import static com.jeffbrower.Logger.stringify;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.Reader;
 import java.io.Writer;
 import java.util.List;
 
 public class Formatter implements Closeable {
+   public static void format(final Reader r, final Writer w, final FormatOptions o) throws IOException {
+      try (final Parser p = new Parser(r, new Formatter(w, o))) {
+         p.parseAll();
+      }
+   }
+
    private final Writer w;
    private final FormatOptions o;
 

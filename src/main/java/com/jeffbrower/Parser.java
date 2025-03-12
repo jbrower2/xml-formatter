@@ -6,6 +6,7 @@ import static com.jeffbrower.Logger.stringify;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.PushbackReader;
+import java.io.Reader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.IntPredicate;
@@ -19,14 +20,16 @@ public class Parser implements Closeable {
    private final PushbackReader r;
    private final Formatter f;
 
-   public Parser(final PushbackReader r, final Formatter f) {
-      this.r = r;
+   public Parser(final Reader r, final Formatter f) {
+      this.r = r instanceof PushbackReader ? (PushbackReader) r : new PushbackReader(r);
       this.f = f;
    }
 
    @Override
    public void close() throws IOException {
-      r.close();
+      try (r; f) {
+         // close everything
+      }
    }
 
    // base parsing methods
