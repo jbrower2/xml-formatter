@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.function.IntPredicate;
 import java.util.regex.Pattern;
 
-public class Parser implements Closeable {
+class Parser implements Closeable {
    private static Pattern VERSION = Pattern.compile("(['\"])1\\.\\d+\\1");
    private static Pattern ENCODING = Pattern.compile("(['\"])UTF-8\\1");
    private static Pattern STANDALONE = Pattern.compile("(['\"])(?:yes|no)\\1");
@@ -20,7 +20,7 @@ public class Parser implements Closeable {
    private final PushbackReader r;
    private final Formatter f;
 
-   public Parser(final Reader r, final Formatter f) {
+   Parser(final Reader r, final Formatter f) {
       this.r = r instanceof PushbackReader ? (PushbackReader) r : new PushbackReader(r);
       this.f = f;
    }
@@ -35,7 +35,7 @@ public class Parser implements Closeable {
    // base parsing methods
 
    /** Parse the entire input and write the entire output. */
-   public void parseAll() throws IOException {
+   void parseAll() throws IOException {
       while (parseOneStep()) {
          // keep going
       }
@@ -46,7 +46,7 @@ public class Parser implements Closeable {
     *
     * @return true if there is more to parse, false if we've reached the end of the file
     */
-   public boolean parseOneStep() throws IOException {
+   boolean parseOneStep() throws IOException {
       final int c = r.read();
       if (c == -1) {
          // reached EOF

@@ -13,7 +13,7 @@ import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-public class FormattingTest {
+class FormattingTest {
    @ParameterizedTest
    @ValueSource(strings = {
       "test1",

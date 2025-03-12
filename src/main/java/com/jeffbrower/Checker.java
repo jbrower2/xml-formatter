@@ -21,6 +21,10 @@ public class Checker {
       }
    }
 
+   private Checker() {
+      throw new UnsupportedOperationException();
+   }
+
    private static class InputMismatchException extends RuntimeException {
       // TODO perhaps investigate whether it would be easy to show a diff, or at least point to a location in the input?
    }

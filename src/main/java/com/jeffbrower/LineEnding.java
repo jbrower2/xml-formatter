@@ -11,7 +11,7 @@ public enum LineEnding {
    CRLF("\r\n");
 
    /** The line ending as a string. */
-   public final String string;
+   final String string;
 
    private LineEnding(final String string) {
       this.string = string;

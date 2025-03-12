@@ -19,7 +19,7 @@ public class Formatter implements Closeable {
    private final Writer w;
    private final FormatOptions o;
 
-   public Formatter(final Writer w, final FormatOptions o) {
+   Formatter(final Writer w, final FormatOptions o) {
       this.w = w;
       this.o = o;
    }
@@ -29,7 +29,7 @@ public class Formatter implements Closeable {
       w.close();
    }
 
-   enum OneLineStatus {
+   private static enum OneLineStatus {
       /** We know this element can fit on one line, using spaces between attributes. */
       ONE_LINE,
 
@@ -40,6 +40,9 @@ public class Formatter implements Closeable {
       MULTIPLE_LINES
    }
 
+   // formatting state variables
+
+   /** Current indentation level. */
    private int indent = 0;
 
    /**
@@ -65,11 +68,11 @@ public class Formatter implements Closeable {
     */
    private String childStringOneLine = null;
 
-   public void writeIndent() throws IOException {
+   private void writeIndent() throws IOException {
       w.write(o.useTabs ? "\t".repeat(indent) : " ".repeat(indent * o.tabWidth));
    }
 
-   public void writeEmptyTag(final String tagName, final List<String> attributes) throws IOException {
+   void writeEmptyTag(final String tagName, final List<String> attributes) throws IOException {
       log("writeEmptyTag");
       log("- tagName: " + tagName);
 
@@ -106,7 +109,7 @@ public class Formatter implements Closeable {
       w.write(o.endOfLine.string);
    }
 
-   public void writeStartTag(final String tagName, final List<String> attributes) throws IOException {
+   void writeStartTag(final String tagName, final List<String> attributes) throws IOException {
       log("writeStartTag");
       log("- tagName: " + tagName);
 
@@ -161,7 +164,7 @@ public class Formatter implements Closeable {
       }
    }
 
-   public void writeTagStart(final String tagName, final List<String> attributes, final OneLineStatus oneLine) throws IOException {
+   private void writeTagStart(final String tagName, final List<String> attributes, final OneLineStatus oneLine) throws IOException {
       // precondition: currently on a new blank line, and there is no in-progress start tag (which is the postcondition of finishInProgressStuff)
       // postcondition: the full state of a start/empty tag is either 1. printed to the Writer, or 2. stored in the state variables of this class
 
@@ -198,7 +201,7 @@ public class Formatter implements Closeable {
       }
    }
 
-   public void writeAttributes(final List<String> attributes, final boolean oneLine) throws IOException {
+   private void writeAttributes(final List<String> attributes, final boolean oneLine) throws IOException {
       log("    writeAttributes");
       log("    - oneLine: " + oneLine);
 
@@ -230,11 +233,11 @@ public class Formatter implements Closeable {
    }
 
    /** If a start tag is partially-complete, this method finishes that start tag so that child elements may be added after. */
-   public void finishInProgressStuff() throws IOException {
+   private void finishInProgressStuff() throws IOException {
       finishInProgressStuff(null);
    }
 
-   public void finishInProgressStuff(final String endTag) throws IOException {
+   private void finishInProgressStuff(final String endTag) throws IOException {
       // postcondition: currently on a new blank line, and there is no in-progress start tag
 
       log("  finishInProgressStuff");
@@ -334,14 +337,14 @@ public class Formatter implements Closeable {
       w.write(o.endOfLine.string);
    }
 
-   public void writeEndTag(final String tagName) throws IOException {
+   void writeEndTag(final String tagName) throws IOException {
       log("writeEndTag");
       log("- tagName: " + tagName);
 
       finishInProgressStuff(tagName);
    }
 
-   public void writeNewLine() throws IOException {
+   void writeNewLine() throws IOException {
       log("writeNewLine");
 
       // if we have a partial start tag, finish it and then add this as a child
@@ -351,7 +354,7 @@ public class Formatter implements Closeable {
       w.write(o.endOfLine.string);
    }
 
-   public void writeText(final String text) throws IOException {
+   void writeText(final String text) throws IOException {
       log("writeText");
       log("- text: " + stringify(text));
 
@@ -380,7 +383,7 @@ public class Formatter implements Closeable {
       w.write(o.endOfLine.string);
    }
 
-   public void writeProcessingInstruction(final String contents) throws IOException {
+   void writeProcessingInstruction(final String contents) throws IOException {
       log("writeProcessingInstruction");
       log("- contents: " + stringify(contents));
 
@@ -396,7 +399,7 @@ public class Formatter implements Closeable {
       w.write(o.endOfLine.string);
    }
 
-   public void writeCdata(final String contents) throws IOException {
+   void writeCdata(final String contents) throws IOException {
       log("writeCdata");
       log("- contents: " + stringify(contents));
 
@@ -412,7 +415,7 @@ public class Formatter implements Closeable {
       w.write(o.endOfLine.string);
    }
 
-   public void writeComment(final String contents) throws IOException {
+   void writeComment(final String contents) throws IOException {
       log("writeComment");
       log("- contents: " + stringify(contents));
 
@@ -428,7 +431,7 @@ public class Formatter implements Closeable {
       w.write(o.endOfLine.string);
    }
 
-   public void printDebugInfo() {
+   void printDebugInfo() {
       log("- indent: " + indent);
       log("- startTagOneLine: " + startTagOneLine);
       log("- inProgressAttributes:" + inProgressAttributes);
