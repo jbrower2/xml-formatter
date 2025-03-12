@@ -7,7 +7,15 @@ import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
 
+/** @see {@link #check} */
 public class Checker {
+   /**
+    * Checks that a file's contents match the expected format.
+    *
+    * @param r The {@link Reader} that provides the file's contents.
+    * @param o The {@link FormatOptions} to validate the file against.
+    * @return {@code true} if the file's contents match the expected format. {@code false} if not.
+    */
    public static boolean check(final Reader r, final FormatOptions o) throws IOException {
       final StringProgress progress = new StringProgress();
 

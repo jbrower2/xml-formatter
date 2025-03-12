@@ -9,7 +9,15 @@ import java.io.Reader;
 import java.io.Writer;
 import java.util.List;
 
+/** @see {@link #format} */
 public class Formatter implements Closeable {
+   /**
+    * Formats a file's contents according to the specified format.
+    *
+    * @param r The {@link Reader} that provides the file's contents.
+    * @param w The {@link Writer} to write the formatted file to.
+    * @param o The {@link FormatOptions} to configure how the file is formatted.
+    */
    public static void format(final Reader r, final Writer w, final FormatOptions o) throws IOException {
       try (final Parser p = new Parser(r, new Formatter(w, o))) {
          p.parseAll();
