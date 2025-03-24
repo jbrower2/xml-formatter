@@ -14,7 +14,7 @@ import java.util.regex.Pattern;
 
 class Parser implements Closeable {
    private static Pattern VERSION = Pattern.compile("(['\"])1\\.\\d+\\1");
-   private static Pattern ENCODING = Pattern.compile("(['\"])UTF-8\\1");
+   private static Pattern ENCODING = Pattern.compile("(['\"])UTF-8\\1", Pattern.CASE_INSENSITIVE);
    private static Pattern STANDALONE = Pattern.compile("(['\"])(?:yes|no)\\1");
 
    private final PushbackReader r;
