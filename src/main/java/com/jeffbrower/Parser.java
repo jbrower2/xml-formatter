@@ -396,7 +396,7 @@ class Parser implements Closeable {
    }
 
    private String parseString() throws IOException {
-      // XML attributes can be single or double quoted, we'll allow either, and preserve which one was used
+      // XML attributes can be single or double quoted, we'll allow either, and preserve which one was used.
       // in order to fully support prettier's style of quoting strings, we'd need to parse the xml entity
       // references (&apos;, etc.) in strings, and replace them with their normal characters, but that adds
       // a non-trivial amount of complexity to this code, so we're going to skip it and call it "good enough"
@@ -410,6 +410,29 @@ class Parser implements Closeable {
       final String value = parseCharData(quoteString);
 
       return quoteString + value + quoteString;
+   }
+
+   private String parseRawString() throws IOException {
+      final int quote = r.read();
+      if (quote != '"' && quote != '\'') {
+         throw new IllegalStateException("Expected '\"' or '\\'': " + quote);
+      }
+
+      final StringBuilder b = new StringBuilder();
+      b.append((char) quote);
+
+      int c;
+      do {
+         c = r.read();
+
+         if (c == -1) {
+            throw new IllegalStateException("Unclosed string");
+         }
+
+         b.append((char) c);
+      } while (c != quote);
+
+      return b.toString();
    }
 
    private void parseEndTag() throws IOException {
@@ -601,7 +624,64 @@ class Parser implements Closeable {
       // 1.0: https://www.w3.org/TR/xml/#NT-doctypedecl
       // 1.1: https://www.w3.org/TR/xml11/#NT-doctypedecl
 
-      throw new UnsupportedOperationException("DOCTYPE declarations are not implemented");
+      final StringBuilder b = new StringBuilder("<!DOCTYPE ");
+
+      parseWhitespace();
+
+      final String name = parseName();
+      b.append(name);
+
+      parseWhitespace();
+
+      int c = r.read();
+      if (c == 'S') {
+         assertCharacter('Y');
+         assertCharacter('S');
+         assertCharacter('T');
+         assertCharacter('E');
+         assertCharacter('M');
+         b.append(" SYSTEM ");
+
+         parseWhitespace();
+
+         final String system = parseRawString();
+         b.append(system);
+
+         parseWhitespace();
+
+         c = r.read();
+      } else if (c == 'P') {
+         assertCharacter('U');
+         assertCharacter('B');
+         assertCharacter('L');
+         assertCharacter('I');
+         assertCharacter('C');
+         b.append(" PUBLIC ");
+
+         parseWhitespace();
+
+         final String pubid = parseRawString();
+         b.append(pubid);
+         b.append(' ');
+
+         parseWhitespace();
+
+         final String system = parseRawString();
+         b.append(system);
+
+         parseWhitespace();
+
+         c = r.read();
+      }
+
+      if (c == '[') {
+         throw new UnsupportedOperationException("Internal DTD is not implemented");
+      }
+
+      assertCharacter(c, '>');
+      b.append('>');
+
+      f.writeDoctype(b.toString());
    }
 
    private void parseCdata() throws IOException {

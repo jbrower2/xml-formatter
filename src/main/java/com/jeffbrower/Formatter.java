@@ -407,6 +407,20 @@ public class Formatter implements Closeable {
       w.write(o.endOfLine.string);
    }
 
+   void writeDoctype(final String tag) throws IOException {
+      log("writeDoctype");
+      log("- tag: " + stringify(tag));
+
+      // if we have a partial start tag, finish it and then add this as a child
+      finishInProgressStuff();
+
+      writeIndent();
+      w.write(tag);
+
+      // end on a new line
+      w.write(o.endOfLine.string);
+   }
+
    void writeCdata(final String contents) throws IOException {
       log("writeCdata");
       log("- contents: " + stringify(contents));
