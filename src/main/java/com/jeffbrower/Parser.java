@@ -47,7 +47,7 @@ class Parser implements Closeable {
     * @return true if there is more to parse, false if we've reached the end of the file
     */
    boolean parseOneStep() throws IOException {
-      final int c = r.read();
+      int c = r.read();
       if (c == -1) {
          // reached EOF
          return false;
@@ -64,14 +64,25 @@ class Parser implements Closeable {
       // the raw character data, without any trimming
       final String rawCharData = parseCharData(null);
 
+      // detect whether we're at EOF
+      c = r.read();
+      final boolean atEOF;
+      if (c == -1) {
+         atEOF = true;
+      } else {
+         atEOF = false;
+         r.unread(c);
+      }
+
       // the data with leading whitespace trimmed
       final String charDataTrimStart = rawCharData.stripLeading();
       if (charDataTrimStart.isEmpty()) {
          // string was entirely whitespace
-         if (hasMultipleNewlines(rawCharData)) {
+         if (hasMultipleNewlines(rawCharData) && !atEOF) {
             // an entirely-whitespace string still produces a newline if it contained multiple newlines
-            // this is how we can preserve blank lines between elements (though we only preserve 1, by design)
-            f.writeNewLine();
+            // this is how we can preserve blank lines between elements (though we only preserve 1, by design).
+            // if this blank string is at the EOF, don't add an additional newline
+            f.writeBlankLine();
          } else {
             log("empty char data: " + stringify(rawCharData));
          }
@@ -82,7 +93,7 @@ class Parser implements Closeable {
       final String whitespacePrefix = rawCharData.substring(0, rawCharData.length() - charDataTrimStart.length());
       if (hasMultipleNewlines(whitespacePrefix)) {
          // if there were multiple newlines at the beginning of this text, add a blank line before the text
-         f.writeNewLine();
+         f.writeBlankLine();
       }
 
       // print the trimmed text. we don't alter the indentation or wrapping if the text itself was multiple lines
@@ -92,7 +103,7 @@ class Parser implements Closeable {
       final String whitespaceSuffix = charDataTrimStart.substring(charData.length());
       if (hasMultipleNewlines(whitespaceSuffix)) {
          // if there were multiple newlines at the end of this text, add a blank line after the text
-         f.writeNewLine();
+         f.writeBlankLine();
       }
 
       // not EOF yet

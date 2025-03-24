@@ -352,8 +352,8 @@ public class Formatter implements Closeable {
       finishInProgressStuff(tagName);
    }
 
-   void writeNewLine() throws IOException {
-      log("writeNewLine");
+   void writeBlankLine() throws IOException {
+      log("writeBlankLine");
 
       // if we have a partial start tag, finish it and then add this as a child
       finishInProgressStuff();
