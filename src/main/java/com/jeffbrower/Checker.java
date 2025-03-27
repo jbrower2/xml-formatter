@@ -7,7 +7,7 @@ import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
 
-/** @see {@link #check} */
+/** @see #check */
 public class Checker {
    /**
     * Checks that a file's contents match the expected format.

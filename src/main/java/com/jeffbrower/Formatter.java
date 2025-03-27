@@ -9,7 +9,7 @@ import java.io.Reader;
 import java.io.Writer;
 import java.util.List;
 
-/** @see {@link #format} */
+/** @see #format */
 public class Formatter implements Closeable {
    /**
     * Formats a file's contents according to the specified format.
